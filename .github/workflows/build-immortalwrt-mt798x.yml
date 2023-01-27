@@ -20,17 +20,29 @@ on:
         default: 'false'
 
 env:
+  # 源码仓库地址
   REPO_URL: https://github.com/hanwckf/immortalwrt-mt798x.git
+  # 源码分支
   REPO_BRANCH: openwrt-21.02
+  # 自定义feeds.conf.default文件名
   FEEDS_CONF: feeds.conf.default
+  # 自定义.config文件名
   CONFIG_FILE: .config
+  # 自定义diy-part1.sh文件名
   DIY_P1_SH: diy-part1.sh
+  # 自定义diy-part2.sh文件名
   DIY_P2_SH: diy-part2.sh
+  # 上传 bin 目录。即包含所有 ipk 文件和固件的目录。默认false
   UPLOAD_BIN_DIR: false
+  # 上传固件目录。默认true
   UPLOAD_FIRMWARE: true
+  # 上传固件到奶牛快传。默认false
   UPLOAD_COWTRANSFER: false
+  # 上传固件到 WeTransfer 。默认false
   UPLOAD_WETRANSFER: false
+  # 上传固件到 releases 。默认false
   UPLOAD_RELEASE: false
+  # 时区设置
   TZ: Asia/Shanghai
 
 jobs:
