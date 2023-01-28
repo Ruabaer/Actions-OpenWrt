@@ -46,7 +46,7 @@ env:
   TZ: Asia/Shanghai
 
 jobs:
-  build:
+  Build:
     runs-on: ubuntu-20.04
     timeout-minutes: 360 # 6小时，自己加时间
 
