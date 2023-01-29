@@ -18,6 +18,8 @@ on:
         description: 'SSH connection to Actions'
         required: false
         default: 'false'
+#  schedule:
+#    - cron: 0 16 * * *
 
 env:
   # 源码仓库地址
@@ -27,15 +29,16 @@ env:
   # 自定义feeds.conf.default文件名
   FEEDS_CONF: feeds.conf.default
   # 自定义.config文件名
-  CONFIG_FILE: mt7986-ax6000.config
+  CONFIG_FILE: hanwckf/.config
   # 自定义diy-part1.sh文件名
-  DIY_P1_SH: diy-part1.sh
+  DIY_P1_SH: hanwckf/diy-part1.sh
   # 自定义diy-part2.sh文件名
-  DIY_P2_SH: diy-part2.sh
+  DIY_P2_SH: hanwckf/diy-part2.sh
+  SSH_ACTIONS: false
   # 上传 bin 目录。即包含所有 ipk 文件和固件的目录。默认false
   UPLOAD_BIN_DIR: false
   # 上传固件目录。默认true
-  UPLOAD_FIRMWARE: true
+  UPLOAD_FIRMWARE: false
   # 上传固件到奶牛快传。默认false
   UPLOAD_COWTRANSFER: false
   # 上传固件到 WeTransfer 。默认false
@@ -44,6 +47,7 @@ env:
   UPLOAD_RELEASE: false
   # 时区设置
   TZ: Asia/Shanghai
+  OPENWRT_NAME: OpenWrt
 
 jobs:
   Build:
@@ -51,10 +55,10 @@ jobs:
     timeout-minutes: 360 # 6小时，自己加时间
 
     steps:
-    - name: Checkout
+    - name: 检查项目分支
       uses: actions/checkout@main
 
-    - name: Initialization environment
+    - name: 初始化编译环境
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
@@ -67,27 +71,32 @@ jobs:
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
 
-    - name: Clone source code
+    - name: 下载固件源码
       working-directory: /workdir
       run: |
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH immortalwrt-mt798x
+	echo -e "[INFO] GITHUB_WORKSPACE = $(GITHUB_WORKSPACE)"
         ln -sf /workdir/immortalwrt-mt798x $GITHUB_WORKSPACE/immortalwrt-mt798x
 
-    - name: Load custom feeds
+    - name: 加载feeds.conf.default & DIY_P1_SH
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF immortalwrt-mt798x/feeds.conf.default
         chmod +x $DIY_P1_SH
         cd immortalwrt-mt798x
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    - name: Update feeds
-      run: cd immortalwrt-mt798x && ./scripts/feeds update -a
+    - name: 更新 feeds
+      run: |
+      	cd immortalwrt-mt798x 
+	./scripts/feeds update -a
 
-    - name: Install feeds
-      run: cd immortalwrt-mt798x && ./scripts/feeds install -a
+    - name: 安装 feeds
+      run: |
+      cd immortalwrt-mt798x
+      ./scripts/feeds install -a
 
-    - name: Load custom configuration
+    - name: 加载config & DIY_P2_SH
       run: |
         [ -e files ] && mv files immortalwrt-mt798x/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE immortalwrt-mt798x/.config
@@ -102,28 +111,34 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
-    - name: Download package
+    - name: 下载安装包
       id: package
       run: |
         cd immortalwrt-mt798x
         make defconfig
-        make download -j8
+        make download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: Compile the firmware
+    - name: 编译固件
       id: compile
       run: |
         cd immortalwrt-mt798x
-        echo -e "$(nproc) thread compile"
+        echo -e "[INFO] $(nproc) thread compile"
         make -j$(nproc) || make -j1 || make -j1 V=s
         # echo "::set-output name=status::success"        
-        echo "{status}={success}" >> $GITHUB_OUTPUT
+        
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+	echo -e "[INFO] DEVICE_NAME = $(DEVICE_NAME)"
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-
-    - name: Check space usage
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*TARGET_.*_(.*)_DEVICE_.*=y/\1/' > TARGET_NAME
+	echo -e "[INFO] TARGET_NAME = $(TARGET_NAME)"
+        [ -s TARGET_NAME ] && echo "TARGET_NAME=$(cat TARGET_NAME)" >> $GITHUB_ENV
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV	
+	echo "status=success" >> $GITHUB_OUTPUT
+	echo 'EOF' >> $GITHUB_ENV
+	
+    - name: 查看磁盘使用情况
       if: (!cancelled())
       run: df -hT
 
@@ -134,7 +149,7 @@ jobs:
         name: immortalwrt-mt798x_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: immortalwrt-mt798x/bin
 
-    - name: Organize files
+    - name: 整理文件并重命名
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
@@ -142,7 +157,7 @@ jobs:
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         # echo "::set-output name=status::success"
-        echo "{status}={success}" >> $GITHUB_OUTPUT
+        echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware directory
       uses: actions/upload-artifact@main
