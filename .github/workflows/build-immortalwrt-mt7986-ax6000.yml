@@ -93,8 +93,8 @@ jobs:
 
     - name: 安装 feeds
       run: |
-      cd immortalwrt-mt798x
-      ./scripts/feeds install -a
+        cd immortalwrt-mt798x
+        ./scripts/feeds install -a
 
     - name: 加载config & DIY_P2_SH
       run: |
