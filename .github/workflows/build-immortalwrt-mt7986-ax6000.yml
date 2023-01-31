@@ -38,13 +38,13 @@ env:
   # 上传 bin 目录。即包含所有 ipk 文件和固件的目录。默认false
   UPLOAD_BIN_DIR: false
   # 上传固件目录。默认true
-  UPLOAD_FIRMWARE: false
+  UPLOAD_FIRMWARE: true
   # 上传固件到奶牛快传。默认false
   UPLOAD_COWTRANSFER: false
   # 上传固件到 WeTransfer 。默认false
   UPLOAD_WETRANSFER: false
   # 上传固件到 releases 。默认false
-  UPLOAD_RELEASE: false
+  UPLOAD_RELEASE: true
   # 时区设置
   TZ: Asia/Shanghai
   OPENWRT_NAME: OpenWrt
@@ -172,7 +172,28 @@ jobs:
       with:
         name: immortalwrt-mt798x_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
-
+        
+    - name: 生成release标签
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+        echo "release_tag=${{ env.FILE_DATE }}" >> $GITHUB_OUTPUT
+        touch release.txt
+        echo "📥 固件下载" >> release.txt
+        echo "status=success" >> $GITHUB_OUTPUT
+        
+    - name: 发布至release
+      uses: softprops/action-gh-release@v1
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: ${{ env.FIRMWARE }}/*
+        name: ${{ env.FILE_DATE }}
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
+        
+        
     - name: Upload firmware to cowtransfer
       id: cowtransfer
       if: steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true' && !cancelled()
@@ -205,18 +226,9 @@ jobs:
         # echo "::set-output name=status::success"
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: Upload firmware to release
-      uses: softprops/action-gh-release@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
 
     - name: Delete workflow runs
-      uses: GitRML/delete-workflow-runs@main
+      uses: Ruabaer/delete-workflow-runs@main
       with:
         retain_days: 1
         keep_minimum_runs: 3
